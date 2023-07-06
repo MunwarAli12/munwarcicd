@@ -1,0 +1,71 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup Java
+        uses: actions/setup-java@v2
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Cache Maven Dependencies
+        uses: actions/cache@v2
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven
+
+      - name: Build and Test
+        run: mvn clean install -X
+
+      - uses: mr-smithers-excellent/docker-build-push@v6
+        name: Build & push Docker image
+        with:
+          image: munwarali/servertask
+          tags: latest
+          registry: docker.io
+          dockerfile: Dockerfile
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: servertask
+          path: target/servertask.jar
+
+  deploy:
+    needs: build
+    runs-on: windows-latest
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: servertask
+          path: target/
+
+      - name: Deploy to production
+        run: |
+          docker stop servertask || true
+          docker rm servertask || true
+          docker pull munwarali/servertask
+          docker run -d --restart=always --name servertask -p 127.0.0.1:8080:8080 servertask
+
+      - name: Wait for application to start
+        run: Start-Sleep -s 10  # Adjust the wait time if necessary
+
+      - name: Launch default browser
+        run: start http://localhost:8080  # Replace with the appropriate URL for your application
