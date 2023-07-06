@@ -28,7 +28,7 @@ jobs:
           restore-keys: ${{ runner.os }}-maven
 
       - name: Build and Test
-        run: mvn clean install -X
+        run: mvn clean install -B
 
       - uses: mr-smithers-excellent/docker-build-push@v6
         name: Build & push Docker image
